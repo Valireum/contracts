@@ -140,4 +140,13 @@ contract ValireumItems is ERC1155URIStorage, Ownable {
         }
         
     }
+
+
+    // set contracts
+
+    function setFactory (address _newFactory) external onlyOwner {
+        factory = _newFactory;
+    }
+
+    
 }
