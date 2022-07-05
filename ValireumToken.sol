@@ -5,12 +5,12 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-import "hardhat/console.sol";
+
 
 contract ValireumToken is ERC20, ERC20Burnable {
     
-    uint256 public preSalePrice = 0.02 ether; // PreSale Price -- Limited to the first 100 participant
-    uint256 public pubSalePrice = 0.03 ether; // Public Sale Price --
+    uint256 public preSalePrice = 0.025 ether; // PreSale Price -- Limited to the first 100 participant
+    uint256 public pubSalePrice = 0.035 ether; // Public Sale Price --
 
     uint256 public SaleSupply = 100000000 ether; // Sales available supply
     uint256 public cap = 500000000 ether; // VLM Maximum supply
@@ -26,7 +26,9 @@ contract ValireumToken is ERC20, ERC20Burnable {
     address payable liquidityFunds; // The liquidity wallet address. recieve 50% of the collected funds from the sales
     address payable marketingFunds; // The marketing wallet address. recieve 25% of the collected funds from the sales
 
-    uint256 _paymentMatches = 1000; // How many match payment required for the seeders to get paid
+    uint256 _paymentMatches = 300; // How many match payment required for the seeders to get paid
+    uint256 _maxPayment = 100; // Seed payment percentage a 100 of 1%
+    uint256 oldSeedCount = 198; // number of old VLM holders
 
     using Counters for Counters.Counter;
     Counters.Counter private _matchPayments; // Track match payments
@@ -50,11 +52,11 @@ contract ValireumToken is ERC20, ERC20Burnable {
         saleStart = block.timestamp; // We use this timestamp to determine when the end of the sales (30 days after deployment)
 
         // Add the Old VLM contract to the seeders list and balances
-        for (uint i = 0; i < 197; i++) {
+        for (uint i = 0; i < oldSeedCount; i++) {
             _seederIds.increment();
             seederList[_seederIds.current()] = _holders[i];
             seederBalance[_holders[i]].totalAmount = amounts[i] * 10**18;
-            console.log(_holders[i], seederBalance[_holders[i]].totalAmount);
+            //console.log(_holders[i], seederBalance[_holders[i]].totalAmount);
         }
 
         // Set the Dev/Liquidity/Marketing Addresses
@@ -68,6 +70,7 @@ contract ValireumToken is ERC20, ERC20Burnable {
     // Params amount of tokens in Wei, referral address
     // If the referral address is already in the seeder list, he will receive 5% of the amount.
     function buyToken(uint256 _amount, address _ref) public payable {
+        require(_amount >= 10000 ether, "Minimum amount is 10000 VLM");
         // Check if the sales is active.
         require(preSale || publicSale, "Sorry the token sales has ended");
         require(block.timestamp < saleStart + 30 days, "Sorry the token sales has ended");
@@ -77,7 +80,7 @@ contract ValireumToken is ERC20, ERC20Burnable {
         uint256 buyPrice = preSale? preSalePrice : pubSalePrice;
         // Calculate the payment amount in MATIC
         uint256 totalToPay = _amount / 10**18  * buyPrice;
-        console.log(totalToPay);
+        //console.log(totalToPay);
         // Check if the payment amount is correct.
         require(msg.value == totalToPay, "Please send the exact amount.");
 
@@ -102,7 +105,7 @@ contract ValireumToken is ERC20, ERC20Burnable {
         SaleSupply -= _amount;
 
         // Check if we switch to Public sale
-        if (_seederIds.current() >= 300) {
+        if (_seederIds.current() >= oldSeedCount + 100) {
             preSale = false;
             publicSale = true;
         }
@@ -133,7 +136,7 @@ contract ValireumToken is ERC20, ERC20Burnable {
         activeStage = preSale? "Presale" : "Public Sale";
         available = SaleSupply;
         uint256 sold = 100000000 ether - SaleSupply;
-        uint256 preSaleCount = _seederIds.current() - 197; // 197 is the number of old VLM contract holders we added in the constructor.
+        uint256 preSaleCount = _seederIds.current() - oldSeedCount; // oldSeedCount is the number of old VLM contract holders we added in the constructor.
         SaleProgress = preSale? preSaleCount : sold * 100 / 100000000 ether;
         
         
@@ -167,11 +170,11 @@ contract ValireumToken is ERC20, ERC20Burnable {
         if (seedMinting) { // Check if the seeders payments didn't reach 100%
             _matchPayments.increment(); // increase the match payments count
             if (_matchPayments.current() >= _paymentMatches) { // Check if we should pay the seeders
-                console.log("Seedpayment");
-                _matchPayments.reset(); // Reset the match payments count every 1000 payment
+                //console.log("Seedpayment");
+                _matchPayments.reset(); // Reset the match payments count every 300 payment
                 seederPayment(); // We pay the seeders 1% each
                 _Payments.increment(); // Keep track of the payments percentage
-                if (_Payments.current() >= 100) { seedMinting = false; }  // If the seeders is fully paid, we disable this block of code above from seedMinting check.
+                if (_Payments.current() >= _maxPayment) { seedMinting = false; }  // If the seeders is fully paid, we disable this block of code above from seedMinting check.
             }
         }
         
@@ -185,7 +188,7 @@ contract ValireumToken is ERC20, ERC20Burnable {
             address _to = seederList[i+1];
             if (!seederBalance[_to].paid) { // Check if the seeder is not paid
                 uint256 currentBalance = seederBalance[_to].totalAmount - seederBalance[_to].paidAmount; // Get balance
-                uint256 _amount = seederBalance[_to].totalAmount / 100; // Update the amount to 1% of the total amount
+                uint256 _amount = seederBalance[_to].totalAmount / _maxPayment; // Update the amount to 1% of the total amount
                 if (currentBalance < 10000 ether) { // Check if the balance is less than 10000 VLM
                     _amount = currentBalance; // Update the amount to be minted to the whole balance
                 }
